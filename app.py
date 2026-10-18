@@ -1,4 +1,3 @@
-
 import json
 import re
 
@@ -220,6 +219,7 @@ button:hover {
 
     <div class="info">
         <span id="counter"></span>
+        <span id="speedDisplay"></span>
         <span id="remaining"></span>
     </div>
 
@@ -235,18 +235,21 @@ button:hover {
     </div>
 
     <div class="hint">
-        Espace : lecture/pause · ← précédent · → suivant
+        Espace : lecture/pause · ←/→ : mots · ↑/↓ : vitesse (±25 WPM)
     </div>
 </div>
 
 <script>
 const words = WORDS_JSON;
-const interval = INTERVAL_MS;
 const showORP = SHOW_ORP;
+
+let currentWpm = WPM_VALUE;
+let currentInterval = INTERVAL_MS;
 
 const reader = document.getElementById("reader");
 const line = document.getElementById("wordLine");
 const counter = document.getElementById("counter");
+const speedDisplay = document.getElementById("speedDisplay");
 const remaining = document.getElementById("remaining");
 const progress = document.getElementById("progress");
 const playButton = document.getElementById("play");
@@ -295,8 +298,6 @@ function render() {
         line.appendChild(span);
     });
 
-    // Mesurer la vraie largeur des caractères.
-    // La lettre rouge doit rester au centre de l'écran.
     requestAnimationFrame(() => {
         if (anchorIndex >= 0) {
             const anchor = line.children[anchorIndex];
@@ -317,7 +318,6 @@ function render() {
             line.style.left =
                 `${targetOffset - anchorOffset}px`;
         } else {
-            // Sans ORP, centrer le mot complet.
             line.style.left = "50%";
             line.style.transform =
                 "translate(-50%, -50%)";
@@ -327,10 +327,13 @@ function render() {
     counter.textContent =
         `Mot ${index + 1} / ${words.length}`;
 
+    speedDisplay.textContent = 
+        `Vitesse : ${currentWpm} WPM`;
+
     progress.value = index;
 
     const secondsLeft =
-        Math.ceil((words.length - index - 1) * interval / 1000);
+        Math.ceil((words.length - index - 1) * currentInterval / 1000);
 
     remaining.textContent =
         `Temps restant : ${formatTime(secondsLeft)}`;
@@ -355,7 +358,7 @@ function tick() {
     index++;
     render();
 
-    timer = setTimeout(tick, interval);
+    timer = setTimeout(tick, currentInterval);
 }
 
 function togglePlay() {
@@ -372,7 +375,7 @@ function togglePlay() {
     playButton.textContent = "⏸ Pause";
 
     render();
-    timer = setTimeout(tick, interval);
+    timer = setTimeout(tick, currentInterval);
 }
 
 document.getElementById("restart").onclick = () => {
@@ -425,6 +428,16 @@ document.addEventListener("keydown", event => {
         stop();
         index = Math.min(words.length - 1, index + 1);
         render();
+    } else if (event.code === "ArrowUp") {
+        event.preventDefault();
+        currentWpm = Math.min(1200, currentWpm + 25);
+        currentInterval = Math.round(60000 / currentWpm);
+        render();
+    } else if (event.code === "ArrowDown") {
+        event.preventDefault();
+        currentWpm = Math.max(60, currentWpm - 25);
+        currentInterval = Math.round(60000 / currentWpm);
+        render();
     }
 });
 
@@ -438,6 +451,7 @@ render();
 
 html = (
     html.replace("WORDS_JSON", words_json)
+        .replace("WPM_VALUE", str(wpm))
         .replace("INTERVAL_MS", str(interval))
         .replace("FONT_SIZE", str(font_size))
         .replace("SHOW_ORP", json.dumps(use_orp))
