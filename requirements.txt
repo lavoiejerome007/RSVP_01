@@ -1,2 +1,2 @@
-streamlit
-PyMuPDF
+streamlit>=1.35
+PyMuPDF>=1.24
