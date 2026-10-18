@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 st.title("Lecteur RSVP")
-st.write("Lecture rapide avec point de reconnaissance optimal (ORP) et durée adaptative.")
+st.write("Lecture rapide avec point de reconnaissance optimal (ORP) et durée proportionnelle à la longueur.")
 
 # Importer un PDF
 pdf_file = st.file_uploader("Importer un PDF", type=["pdf"])
@@ -271,14 +271,13 @@ function getORPIndex(word) {
     return 4;
 }
 
-// Calcule la durée d'affichage d'un mot en fonction de sa longueur
+// Durée strictement proportionnelle :
+// Un mot de 5 lettres prend exactement baseInterval (durée pour le WPM réglé).
+// Un mot de 10 lettres prend 2 fois plus longtemps.
+// Un mot de 1 lettre prend 5 fois moins longtemps (soit 1/5 du temps).
 function getWordInterval(word, baseInterval) {
-    const length = Array.from(word).length;
-    // Base moyenne de 5 caractères par mot
-    const factor = 0.5 + (length / 5) * 0.5;
-    // On bride le facteur entre 0.5 (mots très courts) et 2.5 (mots très longs)
-    const clampedFactor = Math.max(0.5, Math.min(2.5, factor));
-    return baseInterval * clampedFactor;
+    const length = Array.from(word).length || 1;
+    return baseInterval * (length / 5);
 }
 
 function formatTime(seconds) {
@@ -338,11 +337,11 @@ function render() {
         `Mot ${index + 1} / ${words.length}`;
 
     speedDisplay.textContent = 
-        `Vitesse : ${currentWpm} WPM`;
+        `Vitesse base (5 lett.) : ${currentWpm} WPM`;
 
     progress.value = index;
 
-    // Calcul précis du temps restant basé sur la longueur des mots restants
+    // Calcul exact du temps restant
     let remainingMs = 0;
     for (let i = index + 1; i < words.length; i++) {
         remainingMs += getWordInterval(words[i], currentInterval);
@@ -372,7 +371,6 @@ function tick() {
     index++;
     render();
 
-    // Planifie le prochain mot selon la durée spécifique de ce mot
     const wordInterval = getWordInterval(words[index], currentInterval);
     timer = setTimeout(tick, wordInterval);
 }
@@ -391,7 +389,6 @@ function togglePlay() {
     playButton.textContent = "⏸ Pause";
 
     render();
-    // Lance le premier mot avec son propre intervalle
     const wordInterval = getWordInterval(words[index], currentInterval);
     timer = setTimeout(tick, wordInterval);
 }
