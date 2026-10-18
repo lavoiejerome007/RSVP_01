@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 st.title("Lecteur RSVP")
-st.write("Lecture rapide avec point de reconnaissance optimal (ORP) et durée proportionnelle à la longueur.")
+st.write("Lecture rapide avec point de reconnaissance optimal (ORP) et durée proportionnelle avec buffer.")
 
 # Importer un PDF
 pdf_file = st.file_uploader("Importer un PDF", type=["pdf"])
@@ -271,13 +271,12 @@ function getORPIndex(word) {
     return 4;
 }
 
-// Durée strictement proportionnelle :
-// Un mot de 5 lettres prend exactement baseInterval (durée pour le WPM réglé).
-// Un mot de 10 lettres prend 2 fois plus longtemps.
-// Un mot de 1 lettre prend 5 fois moins longtemps (soit 1/5 du temps).
+// Calcule l'intervalle avec une durée minimale de 0.75 * temps de base
 function getWordInterval(word, baseInterval) {
     const length = Array.from(word).length || 1;
-    return baseInterval * (length / 5);
+    const proportionalInterval = baseInterval * (length / 5);
+    const minInterval = baseInterval * 0.75; // Buffer minimum de 0.75x
+    return Math.max(minInterval, proportionalInterval);
 }
 
 function formatTime(seconds) {
