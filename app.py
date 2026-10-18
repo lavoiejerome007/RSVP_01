@@ -1,468 +1,346 @@
+
 import json
 import re
-from pathlib import Path
 
-import fitz
+import pymupdf
 import streamlit as st
 import streamlit.components.v1 as components
 
-
-# --------------------------------------------------
-# CONFIGURATION
-# --------------------------------------------------
-
 st.set_page_config(
-    page_title="RSVP Reader",
+    page_title="Lecteur RSVP",
     page_icon="📖",
     layout="wide",
-    initial_sidebar_state="expanded",
 )
 
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background-color: #0b0d12;
-        color: #f5f7fc;
-    }
-    [data-testid="stHeader"] {
-        background: transparent;
-    }
-    [data-testid="stSidebar"] {
-        background-color: #121620;
-    }
-    .hero {
-        text-align: center;
-        padding: 12px 0 18px 0;
-    }
-    .hero h1 {
-        font-size: 2.5rem;
-        margin-bottom: 4px;
-    }
-    .hero p {
-        color: #aab2c5;
-        font-size: 1rem;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
+st.title("Lecteur RSVP")
+st.write("Lecture rapide avec point de reconnaissance optimal (ORP).")
+
+# Importer un PDF
+pdf_file = st.file_uploader("Importer un PDF", type=["pdf"])
+
+pdf_text = ""
+if pdf_file:
+    try:
+        document = pymupdf.open(
+            stream=pdf_file.getvalue(),
+            filetype="pdf",
+        )
+        pdf_text = "\n".join(
+            page.get_text("text", sort=True)
+            for page in document
+        )
+        document.close()
+    except Exception as error:
+        st.error(f"Erreur lors de la lecture du PDF : {error}")
+
+# Texte modifiable
+text = st.text_area(
+    "Texte à lire",
+    value=pdf_text,
+    height=150,
+    placeholder="Colle ton texte ici...",
 )
 
-
-# --------------------------------------------------
-# SESSION STATE
-# --------------------------------------------------
-
-if "pdf_text" not in st.session_state:
-    st.session_state.pdf_text = ""
-
-if "filename" not in st.session_state:
-    st.session_state.filename = ""
-
-if "last_upload" not in st.session_state:
-    st.session_state.last_upload = None
-
-
-# --------------------------------------------------
-# HEADER
-# --------------------------------------------------
-
-st.markdown(
-    """
-    <div class="hero">
-        <h1>📖 RSVP Reader</h1>
-        <p>Une nouvelle façon de lire, un mot à la fois.</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-
-# --------------------------------------------------
-# SIDEBAR
-# --------------------------------------------------
+words = re.findall(r"\S+", text.strip()) if text.strip() else []
 
 with st.sidebar:
-    st.header("📄 Document")
-
-    uploaded_file = st.file_uploader(
-        "Choisis un fichier PDF",
-        type=["pdf"],
-        help="Sélectionne un document PDF depuis ton ordinateur.",
-    )
-
-    if uploaded_file is not None:
-        upload_id = (
-            uploaded_file.name,
-            len(uploaded_file.getvalue()),
-        )
-
-        if upload_id != st.session_state.last_upload:
-            try:
-                with fitz.open(
-                    stream=uploaded_file.getvalue(),
-                    filetype="pdf",
-                ) as pdf:
-                    pages = [
-                        page.get_text("text", sort=True)
-                        for page in pdf
-                    ]
-
-                extracted_text = "\n\n".join(pages).strip()
-
-                st.session_state.pdf_text = extracted_text
-                st.session_state.filename = uploaded_file.name
-                st.session_state.last_upload = upload_id
-
-                if extracted_text:
-                    st.success(
-                        f"PDF importé : "
-                        f"{len(extracted_text.split())} mots."
-                    )
-                else:
-                    st.warning(
-                        "Aucun texte trouvé. "
-                        "Ce PDF est peut-être un document scanné. "
-                        "Une fonction OCR sera nécessaire."
-                    )
-
-            except Exception as error:
-                st.error(f"Erreur lors de la lecture du PDF : {error}")
-
-    st.divider()
-    st.header("⚙️ Réglages")
+    st.header("Réglages")
 
     wpm = st.slider(
-        "Vitesse (mots par minute)",
+        "Vitesse (mots/minute)",
         min_value=60,
         max_value=1200,
         value=300,
-        step=20,
+        step=10,
     )
 
     font_size = st.slider(
         "Taille du texte",
-        min_value=36,
+        min_value=30,
         max_value=120,
-        value=76,
-        step=4,
+        value=64,
+        step=2,
     )
 
-    st.caption(
-        "Conseil : commence à 200–300 mots/minute "
-        "et augmente progressivement."
+    use_orp = st.checkbox(
+        "Afficher la lettre rouge (ORP)",
+        value=True,
     )
 
-    st.divider()
-
-    if st.session_state.pdf_text:
-        st.subheader("📚 Document chargé")
-        st.write(st.session_state.filename)
-
-        total_words = len(st.session_state.pdf_text.split())
-        st.metric("Nombre de mots", f"{total_words:,}".replace(",", " "))
-
-        if st.button("🗑️ Effacer le document", use_container_width=True):
-            st.session_state.pdf_text = ""
-            st.session_state.filename = ""
-            st.session_state.last_upload = None
-            st.rerun()
-
-
-# --------------------------------------------------
-# EMPTY STATE
-# --------------------------------------------------
-
-if not st.session_state.pdf_text:
-    st.info("Importe un PDF dans le panneau de gauche pour commencer.")
-
-    st.markdown(
-        """
-        ### Fonctionnalités
-
-        - Lecture automatique, un mot à la fois
-        - Affichage en plein écran
-        - Vitesse de lecture personnalisable
-        - Pause et reprise
-        - Navigation mot par mot
-        - Barre de progression
-        - Estimation du temps restant
-        - Exportation du texte extrait
-        """
+    st.download_button(
+        "Télécharger le texte",
+        data=text,
+        file_name="texte_rsvp.txt",
+        mime="text/plain",
     )
 
+if not words:
+    st.info("Importe un PDF ou colle du texte pour commencer.")
     st.stop()
 
+# Préparer les données JavaScript
+words_json = json.dumps(words, ensure_ascii=False)
+words_json = words_json.replace("<", r"\u003c")
 
-# --------------------------------------------------
-# EXPORT EXTRACTED TEXT
-# --------------------------------------------------
+interval = round(60000 / wpm)
 
-st.download_button(
-    label="⬇️ Télécharger le texte extrait (.txt)",
-    data=st.session_state.pdf_text.encode("utf-8"),
-    file_name=f"{Path(st.session_state.filename).stem}_extrait.txt",
-    mime="text/plain",
-)
-
-
-# --------------------------------------------------
-# RSVP READER
-# --------------------------------------------------
-
-# Encode the PDF text as a JavaScript string safely.
-text_json = json.dumps(st.session_state.pdf_text, ensure_ascii=False)
-text_json = text_json.replace("</", "<\\/")
-
-reader_html = r"""
+html = r"""
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
 <meta charset="UTF-8">
 
 <style>
-    * {
-        box-sizing: border-box;
-    }
+* {
+    box-sizing: border-box;
+}
 
-    body {
-        margin: 0;
-        background: #0b0d12;
-        color: #f5f7fc;
-        font-family: Arial, Helvetica, sans-serif;
-    }
+html, body {
+    margin: 0;
+    padding: 0;
+    background: #101114;
+    color: white;
+    font-family: Arial, sans-serif;
+}
 
-    .app {
-        width: 100%;
-        padding: 8px 0;
-    }
+.app {
+    padding: 14px;
+}
 
-    .reader {
-        position: relative;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 340px;
-        padding: 30px;
-        background: #10141e;
-        border: 1px solid #252c3a;
-        border-radius: 18px;
-        overflow: hidden;
-    }
+.reader {
+    position: relative;
+    width: 100%;
+    height: 300px;
+    background: #181a20;
+    border: 1px solid #353741;
+    border-radius: 12px;
+    overflow: hidden;
+}
 
-    .word {
-        text-align: center;
-        font-size: __FONT_SIZE__px;
-        font-weight: 700;
-        line-height: 1.2;
-        overflow-wrap: anywhere;
-        max-width: 100%;
-    }
+.guide {
+    position: absolute;
+    top: 12%;
+    bottom: 12%;
+    left: 50%;
+    width: 2px;
+    background: #383b44;
+    transform: translateX(-1px);
+}
 
-    .counter {
-        position: absolute;
-        top: 14px;
-        right: 16px;
-        color: #8994aa;
-        font-size: 13px;
-    }
+.word-line {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-block;
 
-    .progress-background {
-        width: 100%;
-        height: 5px;
-        margin-top: 12px;
-        background: #242b39;
-        border-radius: 10px;
-        overflow: hidden;
-    }
+    /* IMPORTANT : toutes les lettres restent sur une ligne */
+    white-space: nowrap;
+    word-break: keep-all;
+    overflow-wrap: normal;
 
-    .progress {
-        width: 0%;
-        height: 100%;
-        background: #8ba7ff;
-    }
+    font-size: FONT_SIZEpx;
+    font-weight: 600;
+    line-height: 1.2;
+    font-kerning: none;
+    font-variant-ligatures: none;
+}
 
-    .controls {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 8px;
-        margin-top: 15px;
-    }
+.orp {
+    color: #ff453a;
+}
 
-    button {
-        padding: 11px 15px;
-        border: 1px solid #323b4e;
-        border-radius: 10px;
-        background: #1a2030;
-        color: #f5f7fc;
-        font-size: 14px;
-        cursor: pointer;
-    }
+.info {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 12px 0;
+    color: #c8c8ce;
+    font-size: 13px;
+}
 
-    button.primary {
-        background: #dce5ff;
-        color: #111827;
-        font-weight: 700;
-    }
+input[type="range"] {
+    width: 100%;
+    accent-color: #ff453a;
+}
 
-    button:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-    }
+.buttons {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 16px;
+}
 
-    .seek {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin-top: 14px;
-        color: #aab2c5;
-        font-size: 13px;
-    }
+button {
+    padding: 10px 14px;
+    color: white;
+    background: #292c34;
+    border: 1px solid #41444f;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+}
 
-    .seek input {
-        width: 100%;
-        accent-color: #8ba7ff;
-    }
+button:hover {
+    background: #41444f;
+}
 
-    .info {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: space-between;
-        gap: 10px;
-        margin-top: 12px;
-        color: #8994aa;
-        font-size: 12px;
-    }
+.primary {
+    background: #d93025;
+}
 
-    .app:fullscreen {
-        padding: 20px;
-        background: #0b0d12;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-    }
+#reader:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    border: none;
+    border-radius: 0;
+}
 
-    .app:fullscreen .reader {
-        min-height: 65vh;
-        border-radius: 18px;
-    }
+#reader:fullscreen .word-line {
+    font-size: min(10vw, 120px);
+}
 
-    @media (max-width: 600px) {
-        .reader {
-            min-height: 260px;
-            padding: 20px;
-        }
-
-        .word {
-            font-size: min(__FONT_SIZE__px, 16vw);
-        }
-    }
+.hint {
+    margin-top: 12px;
+    text-align: center;
+    color: #9295a0;
+    font-size: 12px;
+}
 </style>
 </head>
 
 <body>
+<div class="app">
 
-<div class="app" id="app">
-
-    <div class="reader">
-        <div class="counter" id="counter">Mot 0 / 0</div>
-        <div class="word" id="word">Prêt à lire?</div>
-    </div>
-
-    <div class="progress-background">
-        <div class="progress" id="progress"></div>
-    </div>
-
-    <div class="controls">
-        <button id="previous">⏮ Précédent</button>
-        <button class="primary" id="play">▶ Lecture</button>
-        <button id="next">Suivant ⏭</button>
-        <button id="fullscreen">⛶ Plein écran</button>
-        <button id="restart">↺ Recommencer</button>
-    </div>
-
-    <div class="seek">
-        <span>Position</span>
-        <input id="seek" type="range" min="0" max="0" value="0">
+    <div class="reader" id="reader">
+        <div class="guide"></div>
+        <div class="word-line" id="wordLine"></div>
     </div>
 
     <div class="info">
-        <span id="status">En pause</span>
-        <span id="remaining">Temps restant : —</span>
+        <span id="counter"></span>
+        <span id="remaining"></span>
     </div>
 
+    <input id="progress" type="range"
+           min="0" max="0" value="0">
+
+    <div class="buttons">
+        <button id="restart">↺ Recommencer</button>
+        <button id="prev">← Précédent</button>
+        <button id="play" class="primary">▶ Lire</button>
+        <button id="next">Suivant →</button>
+        <button id="fullscreen">⛶ Plein écran</button>
+    </div>
+
+    <div class="hint">
+        Espace : lecture/pause · ← précédent · → suivant
+    </div>
 </div>
 
 <script>
-const fullText = __TEXT_JSON__;
-const words = fullText.match(/\S+/g) || [];
-const wpm = __WPM__;
+const words = WORDS_JSON;
+const interval = INTERVAL_MS;
+const showORP = SHOW_ORP;
+
+const reader = document.getElementById("reader");
+const line = document.getElementById("wordLine");
+const counter = document.getElementById("counter");
+const remaining = document.getElementById("remaining");
+const progress = document.getElementById("progress");
+const playButton = document.getElementById("play");
 
 let index = 0;
 let playing = false;
 let timer = null;
 
-const wordElement = document.getElementById("word");
-const counterElement = document.getElementById("counter");
-const progressElement = document.getElementById("progress");
-const seekElement = document.getElementById("seek");
-const playButton = document.getElementById("play");
-const statusElement = document.getElementById("status");
-const remainingElement = document.getElementById("remaining");
+progress.max = words.length - 1;
 
-seekElement.max = Math.max(0, words.length - 1);
+function getORPIndex(word) {
+    const length = Array.from(word).length;
+
+    if (length <= 1) return 0;
+    if (length <= 5) return 1;
+    if (length <= 9) return 2;
+    if (length <= 13) return 3;
+
+    return 4;
+}
 
 function formatTime(seconds) {
-    seconds = Math.max(0, Math.ceil(seconds));
+    const minutes = Math.floor(seconds / 60);
+    const secs = seconds % 60;
 
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const remainingSeconds = seconds % 60;
-
-    if (hours > 0) {
-        return `${hours} h ${minutes} min`;
-    }
-
-    if (minutes > 0) {
-        return `${minutes} min ${remainingSeconds} s`;
-    }
-
-    return `${remainingSeconds} s`;
+    return minutes > 0
+        ? `${minutes} min ${secs} s`
+        : `${secs} s`;
 }
 
 function render() {
-    if (words.length === 0) {
-        wordElement.textContent = "Aucun texte trouvé";
-        counterElement.textContent = "Mot 0 / 0";
-        return;
-    }
+    const word = words[index];
+    const chars = Array.from(word);
+    const anchorIndex = showORP ? getORPIndex(word) : -1;
 
-    wordElement.textContent = words[index];
-    counterElement.textContent = `Mot ${index + 1} / ${words.length}`;
+    line.replaceChildren();
 
-    const percentage = ((index + 1) / words.length) * 100;
-    progressElement.style.width = `${percentage}%`;
-    seekElement.value = index;
+    chars.forEach((char, i) => {
+        const span = document.createElement("span");
+        span.textContent = char;
 
-    const secondsRemaining = (
-        (words.length - index - 1) * 60 / wpm
-    );
+        if (i === anchorIndex) {
+            span.className = "orp";
+        }
 
-    remainingElement.textContent =
-        "Temps restant : " + formatTime(secondsRemaining);
+        line.appendChild(span);
+    });
+
+    // Mesurer la vraie largeur des caractères.
+    // La lettre rouge doit rester au centre de l'écran.
+    requestAnimationFrame(() => {
+        if (anchorIndex >= 0) {
+            const anchor = line.children[anchorIndex];
+
+            const anchorRect = anchor.getBoundingClientRect();
+            const lineRect = line.getBoundingClientRect();
+            const readerRect = reader.getBoundingClientRect();
+
+            const anchorCenter =
+                anchorRect.left + anchorRect.width / 2;
+
+            const lineLeft = lineRect.left;
+
+            const anchorOffset = anchorCenter - lineLeft;
+
+            const targetOffset = readerRect.width / 2;
+
+            line.style.left =
+                `${targetOffset - anchorOffset}px`;
+        } else {
+            // Sans ORP, centrer le mot complet.
+            line.style.left = "50%";
+            line.style.transform =
+                "translate(-50%, -50%)";
+        }
+    });
+
+    counter.textContent =
+        `Mot ${index + 1} / ${words.length}`;
+
+    progress.value = index;
+
+    const secondsLeft =
+        Math.ceil((words.length - index - 1) * interval / 1000);
+
+    remaining.textContent =
+        `Temps restant : ${formatTime(secondsLeft)}`;
 }
 
 function stop() {
     playing = false;
-
-    if (timer !== null) {
-        clearTimeout(timer);
-    }
-
+    clearTimeout(timer);
     timer = null;
-    playButton.textContent = "▶ Lecture";
-    statusElement.textContent = "En pause";
+    playButton.textContent = "▶ Lire";
 }
 
 function tick() {
@@ -470,139 +348,103 @@ function tick() {
 
     if (index >= words.length - 1) {
         stop();
-        statusElement.textContent = "Lecture terminée";
+        render();
         return;
     }
 
     index++;
     render();
 
-    timer = setTimeout(tick, 60000 / wpm);
+    timer = setTimeout(tick, interval);
 }
 
-function start() {
-    if (words.length === 0) return;
+function togglePlay() {
+    if (playing) {
+        stop();
+        return;
+    }
 
     if (index >= words.length - 1) {
         index = 0;
     }
 
-    if (timer !== null) {
-        clearTimeout(timer);
-    }
-
     playing = true;
     playButton.textContent = "⏸ Pause";
-    statusElement.textContent = "Lecture en cours";
 
     render();
-    timer = setTimeout(tick, 60000 / wpm);
+    timer = setTimeout(tick, interval);
 }
 
-playButton.addEventListener("click", () => {
-    if (playing) {
-        stop();
-    } else {
-        start();
-    }
-});
-
-document.getElementById("previous").addEventListener("click", () => {
-    stop();
-    index = Math.max(0, index - 1);
-    render();
-});
-
-document.getElementById("next").addEventListener("click", () => {
-    stop();
-    index = Math.min(words.length - 1, index + 1);
-    render();
-});
-
-document.getElementById("restart").addEventListener("click", () => {
+document.getElementById("restart").onclick = () => {
     stop();
     index = 0;
     render();
-});
+};
 
-seekElement.addEventListener("input", () => {
+document.getElementById("prev").onclick = () => {
     stop();
-    index = Number(seekElement.value);
+    index = Math.max(0, index - 1);
     render();
-});
+};
 
-document.getElementById("fullscreen").addEventListener("click", async () => {
-    const app = document.getElementById("app");
+document.getElementById("next").onclick = () => {
+    stop();
+    index = Math.min(words.length - 1, index + 1);
+    render();
+};
 
+playButton.onclick = togglePlay;
+
+document.getElementById("fullscreen").onclick = async () => {
     try {
         if (!document.fullscreenElement) {
-            await app.requestFullscreen();
+            await reader.requestFullscreen();
         } else {
             await document.exitFullscreen();
         }
     } catch (error) {
-        statusElement.textContent =
-            "Le plein écran n'est pas disponible ici.";
+        alert("Impossible d'activer le plein écran.");
     }
-});
+};
 
-document.addEventListener("fullscreenchange", () => {
-    document.getElementById("fullscreen").textContent =
-        document.fullscreenElement
-            ? "⤢ Quitter le plein écran"
-            : "⛶ Plein écran";
-});
+progress.oninput = () => {
+    stop();
+    index = Number(progress.value);
+    render();
+};
 
-document.addEventListener("keydown", (event) => {
+document.addEventListener("keydown", event => {
     if (event.code === "Space") {
-        const tag = document.activeElement.tagName;
-
-        if (tag !== "INPUT" && tag !== "TEXTAREA") {
-            event.preventDefault();
-            playing ? stop() : start();
-        }
-    }
-
-    if (event.code === "ArrowRight") {
+        event.preventDefault();
+        togglePlay();
+    } else if (event.code === "ArrowLeft") {
+        stop();
+        index = Math.max(0, index - 1);
+        render();
+    } else if (event.code === "ArrowRight") {
         stop();
         index = Math.min(words.length - 1, index + 1);
         render();
     }
-
-    if (event.code === "ArrowLeft") {
-        stop();
-        index = Math.max(0, index - 1);
-        render();
-    }
 });
+
+window.addEventListener("resize", render);
 
 render();
 </script>
-
 </body>
 </html>
 """
 
-reader_html = (
-    reader_html
-    .replace("__FONT_SIZE__", str(font_size))
-    .replace("__TEXT_JSON__", text_json)
-    .replace("__WPM__", str(wpm))
+html = (
+    html.replace("WORDS_JSON", words_json)
+        .replace("INTERVAL_MS", str(interval))
+        .replace("FONT_SIZE", str(font_size))
+        .replace("SHOW_ORP", json.dumps(use_orp))
 )
 
 components.html(
-    reader_html,
-    height=480,
+    html,
+    height=500,
     scrolling=False,
-)
-
-st.caption(
-    "Raccourcis clavier : Espace = lecture/pause · "
-    "← = mot précédent · → = mot suivant."
-)
-
-st.caption(
-    "Remarque : les PDF scannés nécessitent un OCR. "
-    "La mise en page de certains PDF à colonnes peut aussi "
-    "nécessiter un nettoyage du texte."
 )
