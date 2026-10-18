@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 st.title("Lecteur RSVP")
-st.write("Lecture rapide avec point de reconnaissance optimal (ORP).")
+st.write("Lecture rapide avec point de reconnaissance optimal (ORP) et durée adaptative.")
 
 # Importer un PDF
 pdf_file = st.file_uploader("Importer un PDF", type=["pdf"])
@@ -271,6 +271,16 @@ function getORPIndex(word) {
     return 4;
 }
 
+// Calcule la durée d'affichage d'un mot en fonction de sa longueur
+function getWordInterval(word, baseInterval) {
+    const length = Array.from(word).length;
+    // Base moyenne de 5 caractères par mot
+    const factor = 0.5 + (length / 5) * 0.5;
+    // On bride le facteur entre 0.5 (mots très courts) et 2.5 (mots très longs)
+    const clampedFactor = Math.max(0.5, Math.min(2.5, factor));
+    return baseInterval * clampedFactor;
+}
+
 function formatTime(seconds) {
     const minutes = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -332,8 +342,12 @@ function render() {
 
     progress.value = index;
 
-    const secondsLeft =
-        Math.ceil((words.length - index - 1) * currentInterval / 1000);
+    // Calcul précis du temps restant basé sur la longueur des mots restants
+    let remainingMs = 0;
+    for (let i = index + 1; i < words.length; i++) {
+        remainingMs += getWordInterval(words[i], currentInterval);
+    }
+    const secondsLeft = Math.ceil(remainingMs / 1000);
 
     remaining.textContent =
         `Temps restant : ${formatTime(secondsLeft)}`;
@@ -358,7 +372,9 @@ function tick() {
     index++;
     render();
 
-    timer = setTimeout(tick, currentInterval);
+    // Planifie le prochain mot selon la durée spécifique de ce mot
+    const wordInterval = getWordInterval(words[index], currentInterval);
+    timer = setTimeout(tick, wordInterval);
 }
 
 function togglePlay() {
@@ -375,7 +391,9 @@ function togglePlay() {
     playButton.textContent = "⏸ Pause";
 
     render();
-    timer = setTimeout(tick, currentInterval);
+    // Lance le premier mot avec son propre intervalle
+    const wordInterval = getWordInterval(words[index], currentInterval);
+    timer = setTimeout(tick, wordInterval);
 }
 
 document.getElementById("restart").onclick = () => {
